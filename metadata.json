@@ -1,0 +1,6 @@
+{
+  "name": "AG Tech SMM",
+  "description": "Full-stack Social Media Marketing (SMM) Panel website with user dashboard, admin panel, dynamic API integrations, manual fund verification, order tracking, and custom branding.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

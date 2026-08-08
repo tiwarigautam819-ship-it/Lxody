@@ -1,0 +1,12 @@
+# Render Deployment Configuration
+services:
+  - type: web
+    name: ag-tech-smm
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
