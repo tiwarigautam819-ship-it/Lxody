@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Rocket,
   Zap,
@@ -20,6 +20,43 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
   const { website, socialLinks } = useSettings();
   const brandName = website?.name || 'AG Tech SMM';
+
+  const [totalOrdersCount, setTotalOrdersCount] = useState<number>(() => {
+    const saved = localStorage.getItem('ag_total_orders_count');
+    const savedTime = localStorage.getItem('ag_total_orders_time');
+    const now = Date.now();
+    const defaultStart = 1270691;
+    if (saved && savedTime) {
+      const parsedSaved = parseInt(saved, 10);
+      const parsedTime = parseInt(savedTime, 10);
+      if (!isNaN(parsedSaved) && !isNaN(parsedTime) && parsedTime <= now) {
+        const elapsedSeconds = Math.floor((now - parsedTime) / 1000);
+        const added = Math.floor((elapsedSeconds / 30) * 2.5);
+        const currentTotal = parsedSaved + added;
+        localStorage.setItem('ag_total_orders_count', currentTotal.toString());
+        localStorage.setItem('ag_total_orders_time', now.toString());
+        return currentTotal;
+      }
+    }
+    localStorage.setItem('ag_total_orders_count', defaultStart.toString());
+    localStorage.setItem('ag_total_orders_time', now.toString());
+    return defaultStart;
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const increment = Math.floor(Math.random() * 2) + 2; // Returns 2 or 3
+      setTotalOrdersCount((prev) => {
+        const next = prev + increment;
+        const now = Date.now();
+        localStorage.setItem('ag_total_orders_count', next.toString());
+        localStorage.setItem('ag_total_orders_time', now.toString());
+        return next;
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F4F6F9]">
@@ -62,7 +99,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
           {/* Experience Stat */}
           <div className="pt-6 grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-xl mx-auto text-center border-t border-white/10 mt-8">
             <div>
-              <p className="text-2xl sm:text-3xl font-black">1.2M+</p>
+              <p className="text-2xl sm:text-3xl font-black">{totalOrdersCount.toLocaleString()}</p>
               <p className="text-xs text-blue-200">Completed Orders</p>
             </div>
             <div>

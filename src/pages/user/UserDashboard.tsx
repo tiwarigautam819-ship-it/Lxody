@@ -129,8 +129,28 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onNavigate }) => {
   const [orderError, setOrderError] = useState<string>('');
   const [orderSuccess, setOrderSuccess] = useState<any>(null);
 
-  // Global Total Orders count simulation
-  const [totalOrdersCount, setTotalOrdersCount] = useState<number>(1270691);
+  // Global Total Orders count simulation with auto-increment every 30 seconds
+  const [totalOrdersCount, setTotalOrdersCount] = useState<number>(() => {
+    const saved = localStorage.getItem('ag_total_orders_count');
+    const savedTime = localStorage.getItem('ag_total_orders_time');
+    const now = Date.now();
+    const defaultStart = 1270691;
+    if (saved && savedTime) {
+      const parsedSaved = parseInt(saved, 10);
+      const parsedTime = parseInt(savedTime, 10);
+      if (!isNaN(parsedSaved) && !isNaN(parsedTime) && parsedTime <= now) {
+        const elapsedSeconds = Math.floor((now - parsedTime) / 1000);
+        const added = Math.floor((elapsedSeconds / 30) * 2.5);
+        const currentTotal = parsedSaved + added;
+        localStorage.setItem('ag_total_orders_count', currentTotal.toString());
+        localStorage.setItem('ag_total_orders_time', now.toString());
+        return currentTotal;
+      }
+    }
+    localStorage.setItem('ag_total_orders_count', defaultStart.toString());
+    localStorage.setItem('ag_total_orders_time', now.toString());
+    return defaultStart;
+  });
 
   // Tutorial Videos
   const [tutorialVideos, setTutorialVideos] = useState<TutorialVideo[]>([]);
@@ -172,6 +192,20 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onNavigate }) => {
   useEffect(() => {
     fetchServices();
     fetchVideos();
+
+    // Auto-increase total orders count by 2-3 every 30 seconds
+    const interval = setInterval(() => {
+      const increment = Math.floor(Math.random() * 2) + 2; // Returns 2 or 3
+      setTotalOrdersCount((prev) => {
+        const next = prev + increment;
+        const now = Date.now();
+        localStorage.setItem('ag_total_orders_count', next.toString());
+        localStorage.setItem('ag_total_orders_time', now.toString());
+        return next;
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Filter services by category and search query

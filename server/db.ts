@@ -408,7 +408,7 @@ const defaultData: DBData = {
   tutorialVideos: [
     {
       id: 'VID_1',
-      title: 'How to Place a New Order on AG TECH SMM Panel',
+      title: 'How to Place a New Order',
       description: 'Watch step-by-step how to select service, paste your target link, enter quantity, and place instant orders.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       category: 'New Order Guide',
@@ -417,7 +417,7 @@ const defaultData: DBData = {
     },
     {
       id: 'VID_2',
-      title: 'How to Add Funds using PhonePe / Paytm / UPI QR Code',
+      title: 'How to Add Funds using PhonePe / Paytm / UPI',
       description: 'Step by step guide to scan UPI QR code, pay funds, copy 12-digit UTR and add instant balance.',
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       category: 'Add Funds Guide',
@@ -612,11 +612,11 @@ export class Database {
         const mergedTransactions = (fetchedData.transactions && fetchedData.transactions.length > 0) ? fetchedData.transactions : this.data.transactions;
         const mergedTickets = (fetchedData.tickets && fetchedData.tickets.length > 0) ? fetchedData.tickets : this.data.tickets;
         const mergedNotifications = (fetchedData.notifications && fetchedData.notifications.length > 0) ? fetchedData.notifications : this.data.notifications;
-        const mergedVideos = (fetchedData.tutorialVideos && fetchedData.tutorialVideos.length > 0) ? fetchedData.tutorialVideos : this.data.tutorialVideos;
-        const mergedWebsite = fetchedData.websiteSettings || this.data.websiteSettings;
-        const mergedPayment = fetchedData.paymentSettings || this.data.paymentSettings;
-        const mergedSocial = fetchedData.socialLinks || this.data.socialLinks;
-        const mergedAnnounce = fetchedData.announcements || this.data.announcements;
+        const mergedVideos = (this.data.tutorialVideos && this.data.tutorialVideos.length > 0) ? this.data.tutorialVideos : (fetchedData.tutorialVideos || defaultData.tutorialVideos);
+        const mergedWebsite = this.data.websiteSettings || fetchedData.websiteSettings || defaultData.websiteSettings;
+        const mergedPayment = this.data.paymentSettings || fetchedData.paymentSettings || defaultData.paymentSettings;
+        const mergedSocial = (this.data.socialLinks && this.data.socialLinks.length > 0) ? this.data.socialLinks : (fetchedData.socialLinks || defaultData.socialLinks);
+        const mergedAnnounce = (this.data.announcements && this.data.announcements.length > 0) ? this.data.announcements : (fetchedData.announcements || defaultData.announcements);
 
         this.data = this.ensureDefaults({
           users: mergedUsers,
