@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Menu, ChevronDown, User as UserIcon, Shield, LogOut, Wallet, PlusCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { NotificationBell } from './NotificationBell';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -19,39 +20,42 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onNavigate, act
   const firstLetter = user?.name ? user.name.charAt(0).toUpperCase() : 'G';
 
   return (
-    <header className="sticky top-0 z-40 bg-[#1e60d5] text-white shadow-md">
-      <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between">
+    <header className="sticky top-0 z-40 bg-[#1e60d5] text-white shadow-md w-full max-w-full overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 flex items-center justify-between min-w-0">
         {/* Left Section: Menu Toggle & Logo */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           <button
             onClick={onToggleSidebar}
-            className="p-1.5 rounded-lg text-white hover:bg-blue-600/80 focus:outline-none transition-colors"
+            className="p-1.5 rounded-lg text-white hover:bg-blue-600/80 focus:outline-none transition-colors shrink-0"
             aria-label="Toggle menu"
           >
-            <Menu className="w-6 h-6" />
+            <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
 
           <button
             onClick={() => onNavigate(user ? 'dashboard' : 'landing')}
-            className="flex items-center space-x-2 text-left focus:outline-none group"
+            className="flex items-center space-x-1.5 text-left focus:outline-none group min-w-0"
           >
             {website?.logoUrl ? (
-              <img src={website.logoUrl} alt={brandName} className="h-8 max-w-[130px] object-contain shrink-0" />
+              <img src={website.logoUrl} alt={brandName} className="h-7 sm:h-8 max-w-[100px] sm:max-w-[130px] object-contain shrink-0" />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-xs flex items-center justify-center font-black text-white text-base shadow-xs shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/20 backdrop-blur-xs flex items-center justify-center font-black text-white text-xs sm:text-base shadow-xs shrink-0">
                 AG
               </div>
             )}
-            <span className="font-extrabold text-lg tracking-tight text-white group-hover:text-blue-100 transition-colors truncate max-w-[160px] sm:max-w-none">
+            <span className="font-extrabold text-sm sm:text-lg tracking-tight text-white group-hover:text-blue-100 transition-colors truncate max-w-[110px] sm:max-w-none">
               {brandName}
             </span>
           </button>
         </div>
 
         {/* Right Section: Balance Pill & User Dropdown */}
-        <div className="flex items-center space-x-2.5">
+        <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
           {user ? (
             <>
+              {/* Notification Bell */}
+              <NotificationBell onNavigate={onNavigate} />
+
               {/* Green Wallet Pill */}
               <button
                 onClick={() => onNavigate('add-funds')}

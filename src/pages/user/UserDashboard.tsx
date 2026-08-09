@@ -11,10 +11,96 @@ import {
   BarChart2,
   ExternalLink,
   Check,
-  AlertCircle
+  AlertCircle,
+  Video,
+  Play,
+  HelpCircle,
+  Film
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { Service, ServiceCategory } from '../../types';
+import { Service, ServiceCategory, TutorialVideo } from '../../types';
+
+function getYouTubeEmbedUrl(url: string): string | null {
+  if (!url) return null;
+  if (url.includes('youtube.com/embed/')) return url;
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) return `https://www.youtube.com/embed/${match[1]}`;
+  return null;
+}
+
+function getLinkDetails(categoryName: string = '', serviceName: string = '') {
+  const text = (categoryName + ' ' + serviceName).toLowerCase();
+
+  if (text.includes('youtube') || text.includes('yt ') || text.includes('yt_')) {
+    return {
+      label: 'YouTube Video / Channel Link',
+      placeholder: 'e.g., https://www.youtube.com/watch?v=... or Channel Link',
+      hint: 'Make sure your YouTube video/channel is Public and embedding is enabled.'
+    };
+  }
+
+  if (text.includes('telegram') || text.includes('tg ') || text.includes('tg_')) {
+    return {
+      label: 'Telegram Channel / Group / Post Link',
+      placeholder: 'e.g., https://t.me/yourchannel or https://t.me/yourchannel/123',
+      hint: 'Make sure your Telegram channel or group is Public.'
+    };
+  }
+
+  if (text.includes('facebook') || text.includes('fb ') || text.includes('fb_')) {
+    return {
+      label: 'Facebook Profile / Page / Post Link',
+      placeholder: 'e.g., https://www.facebook.com/yourpage or post URL',
+      hint: 'Make sure Facebook profile/page/post visibility is set to Public.'
+    };
+  }
+
+  if (text.includes('twitter') || text.includes('x.com') || text.includes('tweet')) {
+    return {
+      label: 'Twitter / X Profile or Tweet Link',
+      placeholder: 'e.g., https://x.com/username or tweet link',
+      hint: 'Make sure Twitter / X profile or tweet is Public.'
+    };
+  }
+
+  if (text.includes('tiktok')) {
+    return {
+      label: 'TikTok Video / Profile Link',
+      placeholder: 'e.g., https://www.tiktok.com/@username/video/...',
+      hint: 'Make sure TikTok video or profile is Public.'
+    };
+  }
+
+  if (text.includes('spotify')) {
+    return {
+      label: 'Spotify Track / Artist / Playlist Link',
+      placeholder: 'e.g., https://open.spotify.com/track/...',
+      hint: 'Provide a valid public Spotify track, playlist, or artist URL.'
+    };
+  }
+
+  if (text.includes('website') || text.includes('traffic') || text.includes('site')) {
+    return {
+      label: 'Website URL',
+      placeholder: 'e.g., https://yourwebsite.com',
+      hint: 'Provide complete website URL starting with https://'
+    };
+  }
+
+  if (text.includes('instagram') || text.includes('ig ') || text.includes('ig_')) {
+    return {
+      label: 'Instagram Link or Username',
+      placeholder: 'e.g., https://www.instagram.com/p/... or @username',
+      hint: 'Account or post must be Public (not private).'
+    };
+  }
+
+  return {
+    label: 'Target Link / Username',
+    placeholder: 'e.g., https://link-to-your-post-or-profile',
+    hint: 'Target account or link must be Public.'
+  };
+}
 
 interface UserDashboardProps {
   onNavigate: (page: string) => void;
@@ -46,6 +132,9 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onNavigate }) => {
   // Global Total Orders count simulation
   const [totalOrdersCount, setTotalOrdersCount] = useState<number>(1270691);
 
+  // Tutorial Videos
+  const [tutorialVideos, setTutorialVideos] = useState<TutorialVideo[]>([]);
+
   const fetchServices = async () => {
     try {
       const res = await fetch('/api/services');
@@ -66,8 +155,23 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onNavigate }) => {
     }
   };
 
+  const fetchVideos = async () => {
+    try {
+      const res = await fetch('/api/videos');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setTutorialVideos(data.videos || []);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load tutorial videos:', err);
+    }
+  };
+
   useEffect(() => {
     fetchServices();
+    fetchVideos();
   }, []);
 
   // Filter services by category and search query
@@ -200,8 +304,8 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F6F9] pb-20 pt-4 px-3 sm:px-6">
-      <div className="max-w-4xl mx-auto space-y-5">
+    <div className="min-h-screen bg-[#F4F6F9] pb-20 pt-4 px-3 sm:px-6 w-full max-w-full overflow-x-hidden">
+      <div className="max-w-4xl mx-auto space-y-5 w-full min-w-0">
 
         {/* ================= CARD 1: TOTAL ORDERS AT AGTECHSMM.COM ================= */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
@@ -410,19 +514,33 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onNavigate }) => {
                 )}
 
                 {/* Link Field */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">
-                    Link <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Account Must be Public (e.g., https://instagram.com/p/... or username)"
-                    value={link}
-                    onChange={(e) => setLink(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1e60d5] focus:bg-white transition-all"
-                    required
-                  />
-                </div>
+                {(() => {
+                  const selectedCategoryObj = categories.find((c) => c.id === selectedCategory);
+                  const linkDetails = getLinkDetails(selectedCategoryObj?.name || activeService?.categoryName || '', activeService?.name || '');
+                  return (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+                        <span>{linkDetails.label} <span className="text-red-500">*</span></span>
+                        {activeService && (
+                          <span className="text-[11px] text-[#1e60d5] font-semibold lowercase">
+                            {selectedCategoryObj?.name || activeService.categoryName}
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={linkDetails.placeholder}
+                        value={link}
+                        onChange={(e) => setLink(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1e60d5] focus:bg-white transition-all font-medium"
+                        required
+                      />
+                      <p className="text-[11px] text-gray-500 mt-1 font-medium">
+                        {linkDetails.hint}
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {/* Quantity Field */}
                 <div>
@@ -520,6 +638,94 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onNavigate }) => {
             )}
           </div>
         </div>
+
+        {/* ================= CARD 4: TUTORIAL & GUIDE VIDEOS ================= */}
+        {tutorialVideos.filter((v) => v.active).length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-5 sm:p-6 space-y-4">
+            <div className="flex items-center space-x-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shadow-md shrink-0">
+                <Video className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900 tracking-tight flex items-center space-x-2">
+                  <span>How to Place Orders & Video Guides</span>
+                  <span className="bg-red-50 text-red-600 text-[10px] uppercase font-black px-2 py-0.5 rounded-full border border-red-100">
+                    Tutorials
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-500 font-medium">
+                  Watch official video guides to learn how to place orders and manage your account.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+              {tutorialVideos
+                .filter((v) => v.active)
+                .map((video) => {
+                  const embedUrl = getYouTubeEmbedUrl(video.videoUrl);
+                  return (
+                    <div
+                      key={video.id}
+                      className="bg-gray-50/80 rounded-2xl border border-gray-200/80 overflow-hidden shadow-2xs hover:shadow-md transition-shadow flex flex-col"
+                    >
+                      <div className="relative aspect-video w-full bg-slate-900 overflow-hidden">
+                        {embedUrl ? (
+                          <iframe
+                            src={embedUrl}
+                            title={video.title}
+                            className="w-full h-full border-0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        ) : (
+                          <a
+                            href={video.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full h-full flex flex-col items-center justify-center text-white hover:bg-slate-800 transition-colors p-4 text-center"
+                          >
+                            <Play className="w-12 h-12 text-red-500 mb-2 fill-current" />
+                            <span className="font-bold text-xs underline">Watch Tutorial Video</span>
+                          </a>
+                        )}
+
+                        <span className="absolute top-2.5 left-2.5 bg-slate-900/90 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md border border-slate-700">
+                          {video.category || 'Guide'}
+                        </span>
+                      </div>
+
+                      <div className="p-4 flex-1 flex flex-col justify-between space-y-2 bg-white">
+                        <div>
+                          <h4 className="font-bold text-gray-900 text-xs sm:text-sm leading-snug">
+                            {video.title}
+                          </h4>
+                          {video.description && (
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                              {video.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-between text-[11px] border-t border-gray-100">
+                          <a
+                            href={video.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#1e60d5] font-extrabold hover:underline flex items-center space-x-1"
+                          >
+                            <span>Open on YouTube</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                          <span className="text-gray-400 font-medium text-[10px]">AG TECH SMM</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

@@ -144,3 +144,27 @@ export interface ApiProvider {
   status: 'active' | 'inactive';
   balance?: number;
 }
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  userEmail: string;
+  type: 'order_status_change' | 'ticket_reply' | 'system';
+  title: string;
+  message: string;
+  link?: string;
+  emailSent?: boolean;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface TutorialVideo {
+  id: string;
+  title: string;
+  description?: string;
+  videoUrl: string;
+  category?: string;
+  active: boolean;
+  createdAt: string;
+}
+

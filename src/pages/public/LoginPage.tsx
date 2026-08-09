@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import { GoogleAccountModal } from '../../components/GoogleAccountModal';
+import { tryGoogleFirebasePopup } from '../../lib/firebaseAuth';
 
 interface LoginPageProps {
   onNavigate: (page: string) => void;
@@ -15,6 +17,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,14 +38,25 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
     setErrorMsg('');
     setLoading(true);
     try {
-      // Simulate Google Sign-In with test account email
-      await loginWithGoogle('googleuser@agtechsmm.com', 'Google User');
-      onNavigate('dashboard');
+      // 1. Try Firebase Popup first
+      const popupResult = await tryGoogleFirebasePopup();
+      if (popupResult && popupResult.email) {
+        await loginWithGoogle(popupResult.email, popupResult.name);
+        onNavigate('dashboard');
+        return;
+      }
+      // 2. If popup was blocked or closed, open Google Account modal
+      setShowGoogleModal(true);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Google sign-in failed');
+      setShowGoogleModal(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectGoogleAccount = async (googleEmail: string, googleName: string) => {
+    await loginWithGoogle(googleEmail, googleName);
+    onNavigate('dashboard');
   };
 
   return (
@@ -157,13 +171,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
           <span>Sign In with Google</span>
         </button>
 
-        {/* Demo Accounts Helper */}
-        <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3 text-[11px] text-blue-900 space-y-1">
-          <p className="font-bold uppercase tracking-wider text-[#1e60d5]">Quick Demo Credentials:</p>
-          <p>• User: <code className="font-mono bg-white px-1 py-0.5 rounded text-blue-800">user@agtechsmm.com</code> / <code className="font-mono bg-white px-1 py-0.5 rounded text-blue-800">user123</code></p>
-          <p>• Admin: <code className="font-mono bg-white px-1 py-0.5 rounded text-blue-800">admin@agtechsmm.com</code> / <code className="font-mono bg-white px-1 py-0.5 rounded text-blue-800">admin123</code></p>
-        </div>
-
         {/* Footer Link */}
         <div className="text-center text-xs text-gray-600">
           Don't have an account?{' '}
@@ -176,6 +183,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
         </div>
 
       </div>
+
+      <GoogleAccountModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSelectAccount={handleSelectGoogleAccount}
+      />
     </div>
   );
 };

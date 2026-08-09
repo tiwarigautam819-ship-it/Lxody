@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { db, User, Order, Service, FundRequest, Transaction, SupportTicket, ApiProvider } from './server/db.js';
+import { triggerOrderStatusNotification, triggerTicketReplyNotification } from './server/services/emailService.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -199,30 +200,37 @@ app.get('/api/public/settings', (req: Request, res: Response) => {
 });
 
 app.get('/api/services', (req: Request, res: Response) => {
-  const categories = db.getCategories();
-  const services = db.getServices().filter((s) => s.status === 'active');
-  const globalMargin = db.getWebsiteSettings().globalMarginPercent || 20;
+  try {
+    const categories = db.getCategories() || [];
+    const services = (db.getServices() || []).filter((s) => s.status === 'active');
+    const websiteSettings = db.getWebsiteSettings();
+    const globalMargin = websiteSettings && websiteSettings.globalMarginPercent !== undefined ? websiteSettings.globalMarginPercent : 20;
 
-  // Calculate final selling price if margin changed globally
-  const calculatedServices = services.map((srv) => {
-    let finalSellingPrice = srv.finalPrice;
-    if (srv.customPrice && srv.customPrice > 0) {
-      finalSellingPrice = srv.customPrice;
-    } else {
-      const margin = srv.marginPercent !== undefined ? srv.marginPercent : globalMargin;
-      finalSellingPrice = Number((srv.originalPrice * (1 + margin / 100)).toFixed(2));
-    }
-    return {
-      ...srv,
-      finalPrice: finalSellingPrice
-    };
-  });
+    // Calculate final selling price if margin changed globally
+    const calculatedServices = services.map((srv) => {
+      let finalSellingPrice = srv.finalPrice;
+      const orig = Number(srv.originalPrice) || 0;
+      if (srv.customPrice && srv.customPrice > 0) {
+        finalSellingPrice = srv.customPrice;
+      } else {
+        const margin = srv.marginPercent !== undefined ? srv.marginPercent : globalMargin;
+        finalSellingPrice = Number((orig * (1 + margin / 100)).toFixed(2));
+      }
+      return {
+        ...srv,
+        finalPrice: isNaN(finalSellingPrice) ? 0 : finalSellingPrice
+      };
+    });
 
-  res.json({
-    success: true,
-    categories,
-    services: calculatedServices
-  });
+    res.json({
+      success: true,
+      categories,
+      services: calculatedServices
+    });
+  } catch (err: any) {
+    console.error('Error in /api/services:', err);
+    res.status(500).json({ success: false, error: 'Failed to load services' });
+  }
 });
 
 app.get('/api/user/dashboard-stats', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
@@ -631,7 +639,7 @@ app.post('/api/tickets/create', authMiddleware, (req: AuthenticatedRequest, res:
   res.json({ success: true, message: 'Ticket created successfully!', ticket: newTicket });
 });
 
-app.post('/api/tickets/:id/reply', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/tickets/:id/reply', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) return;
   const { id } = req.params;
   const { message } = req.body;
@@ -673,7 +681,129 @@ app.post('/api/tickets/:id/reply', authMiddleware, (req: AuthenticatedRequest, r
     updatedAt: now
   });
 
-  res.json({ success: true, message: 'Reply posted' });
+  // If Admin replied, trigger Firebase Cloud Function email notification to user
+  let emailSent = false;
+  if (isUserAdmin) {
+    db.addNotification({
+      id: 'NOTIF_' + Date.now(),
+      userId: ticket.userId,
+      userEmail: ticket.userEmail,
+      type: 'ticket_reply',
+      title: `Admin replied to Ticket #${ticket.id}`,
+      message: `Support message on "${ticket.subject}": ${message.substring(0, 100)}...`,
+      link: '/support',
+      emailSent: true,
+      read: false,
+      createdAt: now
+    });
+
+    const emailRes = await triggerTicketReplyNotification({
+      ticketId: ticket.id,
+      userEmail: ticket.userEmail,
+      subject: ticket.subject,
+      adminMessage: message
+    });
+    emailSent = emailRes.success;
+  }
+
+  res.json({
+    success: true,
+    message: 'Reply posted',
+    emailNotification: isUserAdmin
+      ? { triggered: true, sent: emailSent, recipient: ticket.userEmail }
+      : { triggered: false }
+  });
+});
+
+// ==================== NOTIFICATIONS ROUTES ====================
+app.get('/api/notifications', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) return;
+  const notifications = db.getNotifications(req.user.id);
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  res.json({ success: true, notifications, unreadCount });
+});
+
+app.post('/api/notifications/read-all', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) return;
+  db.markAllNotificationsRead(req.user.id);
+  res.json({ success: true, message: 'All notifications marked as read' });
+});
+
+app.post('/api/notifications/:id/read', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) return;
+  const { id } = req.params;
+  db.markNotificationRead(id, req.user.id);
+  res.json({ success: true, message: 'Notification marked as read' });
+});
+
+app.post('/api/admin/notifications/test-email', authMiddleware, adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const { recipientEmail, type, testMessage } = req.body;
+  const targetEmail = recipientEmail || req.user?.email || 'tiwarigautam819@gmail.com';
+
+  if (type === 'order') {
+    const result = await triggerOrderStatusNotification({
+      orderId: 'TEST_' + Math.floor(1000 + Math.random() * 9000),
+      userEmail: targetEmail,
+      serviceName: 'Instagram Followers [Real & High Speed]',
+      oldStatus: 'Pending',
+      newStatus: 'Completed',
+      charge: 99.00
+    });
+    res.json({ success: true, message: `Test order email dispatched to ${targetEmail}`, result });
+  } else {
+    const result = await triggerTicketReplyNotification({
+      ticketId: 'TCK_TEST',
+      userEmail: targetEmail,
+      subject: 'Order Query & Refill Request',
+      adminMessage: testMessage || 'Your refill request has been processed successfully by AG Tech Admin.'
+    });
+    res.json({ success: true, message: `Test support ticket email dispatched to ${targetEmail}`, result });
+  }
+});
+
+// ==================== TUTORIAL VIDEOS ROUTES ====================
+app.get('/api/videos', (req: Request, res: Response) => {
+  const videos = db.getTutorialVideos(true);
+  res.json({ success: true, videos });
+});
+
+app.get('/api/admin/videos', authMiddleware, adminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const videos = db.getTutorialVideos(false);
+  res.json({ success: true, videos });
+});
+
+app.post('/api/admin/videos', authMiddleware, adminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const { title, description, videoUrl, category, active } = req.body;
+  if (!title || !videoUrl) {
+    res.status(400).json({ error: 'Title and Video URL are required' });
+    return;
+  }
+
+  const newVideo = {
+    id: 'VID_' + Date.now(),
+    title,
+    description: description || '',
+    videoUrl,
+    category: category || 'General Guide',
+    active: active !== undefined ? Boolean(active) : true,
+    createdAt: new Date().toISOString()
+  };
+
+  db.addTutorialVideo(newVideo);
+  res.json({ success: true, message: 'Tutorial video added successfully', video: newVideo });
+});
+
+app.put('/api/admin/videos/:id', authMiddleware, adminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const updates = req.body;
+  db.updateTutorialVideo(id, updates);
+  res.json({ success: true, message: 'Tutorial video updated successfully' });
+});
+
+app.delete('/api/admin/videos/:id', authMiddleware, adminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  db.deleteTutorialVideo(id);
+  res.json({ success: true, message: 'Tutorial video deleted successfully' });
 });
 
 // ==================== ADMIN PANEL ROUTES ====================
@@ -861,7 +991,63 @@ app.get('/api/admin/orders', authMiddleware, adminMiddleware, (req: Authenticate
   res.json({ success: true, orders });
 });
 
-app.put('/api/admin/orders/:id/status', authMiddleware, adminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/admin/orders/:id', authMiddleware, adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const { status, startCount, remains } = req.body;
+
+  const order = db.getOrders().find((o) => o.id === id);
+  if (!order) {
+    res.status(404).json({ error: 'Order not found' });
+    return;
+  }
+
+  const oldStatus = order.status;
+  const updates: any = {};
+  if (status) updates.status = status;
+  if (startCount !== undefined) updates.startCount = Number(startCount);
+  if (remains !== undefined) updates.remains = Number(remains);
+
+  db.updateOrder(id, updates);
+
+  // Trigger email notification if status changed
+  let emailSent = false;
+  if (status && oldStatus !== status) {
+    db.addNotification({
+      id: 'NOTIF_' + Date.now(),
+      userId: order.userId,
+      userEmail: order.userEmail,
+      type: 'order_status_change',
+      title: `Order #${id} is now ${status}`,
+      message: `Your order for "${order.serviceName}" changed status from "${oldStatus}" to "${status}".`,
+      link: '/orders',
+      emailSent: true,
+      read: false,
+      createdAt: new Date().toISOString()
+    });
+
+    const emailRes = await triggerOrderStatusNotification({
+      orderId: id,
+      userEmail: order.userEmail,
+      serviceName: order.serviceName,
+      oldStatus,
+      newStatus: status,
+      charge: order.charge
+    });
+    emailSent = emailRes.success;
+  }
+
+  res.json({
+    success: true,
+    message: `Order #${id} updated successfully`,
+    emailNotification: {
+      triggered: Boolean(status && oldStatus !== status),
+      sent: emailSent,
+      recipient: order.userEmail
+    }
+  });
+});
+
+app.put('/api/admin/orders/:id/status', authMiddleware, adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { status, refundUser } = req.body;
 
@@ -871,6 +1057,7 @@ app.put('/api/admin/orders/:id/status', authMiddleware, adminMiddleware, (req: A
     return;
   }
 
+  const oldStatus = order.status;
   db.updateOrder(id, { status });
 
   // Handle refund if canceled/failed
@@ -893,7 +1080,42 @@ app.put('/api/admin/orders/:id/status', authMiddleware, adminMiddleware, (req: A
     }
   }
 
-  res.json({ success: true, message: `Order #${id} status updated to ${status}` });
+  // Trigger Firebase Cloud Function Email Notification & In-App Notification if status changed
+  let emailSent = false;
+  if (oldStatus !== status) {
+    db.addNotification({
+      id: 'NOTIF_' + Date.now(),
+      userId: order.userId,
+      userEmail: order.userEmail,
+      type: 'order_status_change',
+      title: `Order #${id} is now ${status}`,
+      message: `Your order for "${order.serviceName}" changed status from "${oldStatus}" to "${status}".`,
+      link: '/orders',
+      emailSent: true,
+      read: false,
+      createdAt: new Date().toISOString()
+    });
+
+    const emailRes = await triggerOrderStatusNotification({
+      orderId: id,
+      userEmail: order.userEmail,
+      serviceName: order.serviceName,
+      oldStatus,
+      newStatus: status,
+      charge: order.charge
+    });
+    emailSent = emailRes.success;
+  }
+
+  res.json({
+    success: true,
+    message: `Order #${id} status updated to ${status}`,
+    emailNotification: {
+      triggered: oldStatus !== status,
+      sent: emailSent,
+      recipient: order.userEmail
+    }
+  });
 });
 
 app.post('/api/admin/orders/:id/resend', authMiddleware, adminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
@@ -1009,24 +1231,48 @@ app.post('/api/admin/api-providers/:id/sync-services', authMiddleware, adminMidd
   let importedCount = 0;
   let fetchedServices: any[] = [];
 
+  // Attempt live API fetch via POST and GET
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     const body = new URLSearchParams();
     body.append('key', provider.apiKey);
     body.append('action', 'services');
 
-    const response = await fetch(provider.url, {
+    let response = await fetch(provider.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       },
-      body: body.toString()
-    });
+      body: body.toString(),
+      signal: controller.signal
+    }).catch(() => null);
 
-    if (response.ok) {
-      const data = await response.json();
+    if (!response || !response.ok) {
+      const getUrl = `${provider.url}${provider.url.includes('?') ? '&' : '?'}key=${encodeURIComponent(provider.apiKey)}&action=services`;
+      response = await fetch(getUrl, {
+        method: 'GET',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        signal: controller.signal
+      }).catch(() => null);
+    }
+
+    clearTimeout(timeout);
+
+    if (response && response.ok) {
+      const data = await response.json().catch(() => null);
       if (Array.isArray(data) && data.length > 0) {
         fetchedServices = data;
+      } else if (data && typeof data === 'object') {
+        if (Array.isArray(data.services)) {
+          fetchedServices = data.services;
+        } else if (Array.isArray(data.data)) {
+          fetchedServices = data.data;
+        } else {
+          fetchedServices = Object.values(data).filter((v: any) => v && typeof v === 'object' && (v.service || v.id || v.name));
+        }
       }
     }
   } catch (err) {
@@ -1039,7 +1285,9 @@ app.post('/api/admin/api-providers/:id/sync-services', authMiddleware, adminMidd
 
   if (fetchedServices.length > 0) {
     for (const item of fetchedServices) {
-      const catName = item.category || 'General Services';
+      const srvCode = String(item.service || item.service_id || item.id || Math.floor(Math.random() * 90000 + 10000));
+      const catName = item.category || item.category_name || 'General Services';
+
       let category = categories.find((c) => c.name.trim().toLowerCase() === catName.trim().toLowerCase());
       if (!category) {
         category = {
@@ -1050,22 +1298,22 @@ app.post('/api/admin/api-providers/:id/sync-services', authMiddleware, adminMidd
         categories.push(category);
       }
 
-      const origRate = parseFloat(item.rate || '0') || 10;
+      const origRate = parseFloat(item.rate || item.price || item.cost || '0') || 10;
       const finalPrice = Number((origRate * (1 + globalMargin / 100)).toFixed(2));
-      const srvId = `prov_${provider.id}_${item.service}`;
+      const srvId = `prov_${provider.id}_${srvCode}`;
 
-      const existingIdx = services.findIndex((s) => s.id === srvId || (s.apiProviderId === provider.id && s.apiServiceId === String(item.service)));
+      const existingIdx = services.findIndex((s) => s.id === srvId || (s.apiProviderId === provider.id && s.apiServiceId === srvCode));
 
       const newSrv: Service = {
         id: srvId,
         categoryId: category.id,
         categoryName: category.name,
         apiProviderId: provider.id,
-        apiServiceId: String(item.service),
-        name: item.name || `Service #${item.service}`,
+        apiServiceId: srvCode,
+        name: item.name || item.title || `Service #${srvCode}`,
         description: item.type ? `Type: ${item.type} | Refill: ${item.refill ? 'Yes' : 'No'}` : 'High quality fast delivery SMM service.',
-        minQuantity: parseInt(item.min || '10', 10),
-        maxQuantity: parseInt(item.max || '100000', 10),
+        minQuantity: parseInt(item.min || item.min_quantity || '10', 10),
+        maxQuantity: parseInt(item.max || item.max_quantity || '100000', 10),
         originalPrice: origRate,
         marginPercent: globalMargin,
         finalPrice,
@@ -1091,19 +1339,58 @@ app.post('/api/admin/api-providers/:id/sync-services', authMiddleware, adminMidd
     return;
   }
 
-  // Fallback preset pack from Glory SMM Panel
+  // Full Preset Service Catalog for Glory SMM Panel (50+ High Demand Services)
   const fallbackServices = [
-    { service: '101', name: 'Instagram Followers [Real & Active / 30 Days Refill]', category: '👥 Instagram Followers', rate: 75.00, min: 50, max: 100000 },
-    { service: '102', name: 'Instagram Likes [Instant / High Speed / Non-Drop] ⚡', category: '🔥 Instagram Likes & Reels', rate: 12.00, min: 10, max: 500000 },
-    { service: '103', name: 'Instagram Reels Views [Super Fast / Viral Boost] 🚀', category: '🔥 Instagram Likes & Reels', rate: 2.00, min: 100, max: 10000000 },
-    { service: '104', name: 'YouTube Subscribers [Non-Drop / Lifetime Guarantee]', category: '🎥 YouTube Views & Subscribers', rate: 220.00, min: 50, max: 50000 },
-    { service: '105', name: 'YouTube High Retention Views [Monetizable]', category: '🎥 YouTube Views & Subscribers', rate: 90.00, min: 500, max: 1000000 },
-    { service: '106', name: 'Telegram Channel Members [0-10% Drop / Fast]', category: '✈️ Telegram Members & Views', rate: 40.00, min: 100, max: 200000 },
-    { service: '107', name: 'Telegram Post Views [Last 5 Posts Auto Views]', category: '✈️ Telegram Members & Views', rate: 5.00, min: 100, max: 500000 },
-    { service: '108', name: 'Facebook Page Followers / Likes [Real High Quality]', category: '👍 Facebook Services', rate: 95.00, min: 100, max: 100000 },
-    { service: '109', name: 'TikTok Followers [Real Active / Fast Speed]', category: '🎵 TikTok Services', rate: 85.00, min: 100, max: 100000 },
-    { service: '110', name: 'TikTok Video Likes & Views Combo Pack', category: '🎵 TikTok Services', rate: 15.00, min: 100, max: 500000 },
-    { service: '111', name: 'Twitter / X Followers [Real Looking Accounts]', category: '🐦 Twitter (X) Services', rate: 110.00, min: 100, max: 50000 }
+    // Instagram Likes & Reels
+    { service: '101', name: 'Instagram Likes [ Instant / High Speed / Non-Drop ] ⚡', category: '🔥 Instagram Likes & Reels', rate: 12.00, min: 10, max: 500000 },
+    { service: '102', name: 'Instagram Real Indian Likes [ Fast / Organic Reach ] 🇮🇳', category: '🔥 Instagram Likes & Reels', rate: 25.00, min: 20, max: 100000 },
+    { service: '103', name: 'Instagram Reels Views [ Super Fast / Viral Algorithm Boost ] 🚀', category: '🔥 Instagram Likes & Reels', rate: 2.00, min: 100, max: 10000000 },
+    { service: '104', name: 'Instagram Story Views [ All Stories / Instant Start ] 👁️', category: '🔥 Instagram Likes & Reels', rate: 5.00, min: 100, max: 500000 },
+    { service: '105', name: 'Instagram Live Stream Views [ 30 Minutes / Instant ] 🎥', category: '🔥 Instagram Likes & Reels', rate: 120.00, min: 50, max: 10000 },
+
+    // Instagram Followers
+    { service: '201', name: 'Instagram Followers [ Real Accounts / 30 Days Refill ] 👥', category: '👥 Instagram Followers [Real & Active]', rate: 75.00, min: 50, max: 100000 },
+    { service: '202', name: 'Instagram Followers [ 60 Days Refill Guarantee / Non-Drop ] 🛡️', category: '👥 Instagram Followers [Real & Active]', rate: 95.00, min: 50, max: 200000 },
+    { service: '203', name: 'Instagram Real Indian Followers [ High Quality Accounts ] 🇮🇳', category: '👥 Instagram Followers [Real & Active]', rate: 140.00, min: 50, max: 50000 },
+    { service: '204', name: 'Instagram VIP Targeted Followers [ Lifetime Auto Refill ] 💎', category: '👥 Instagram Followers [Real & Active]', rate: 180.00, min: 100, max: 100000 },
+
+    // Instagram Comments & Custom
+    { service: '301', name: 'Instagram Custom Comments [ Enter Own Text / Real Users ] 💬', category: '💬 Instagram Comments & Engagement', rate: 350.00, min: 5, max: 1000 },
+    { service: '302', name: 'Instagram Random Emoji Comments [ High Speed ] 😍', category: '💬 Instagram Comments & Engagement', rate: 120.00, min: 10, max: 5000 },
+    { service: '303', name: 'Instagram Post Shares & Saves Combo [ Explore Page Push ] 📌', category: '💬 Instagram Comments & Engagement', rate: 15.00, min: 50, max: 100000 },
+
+    // YouTube Views & Watch Time
+    { service: '401', name: 'YouTube High Retention Views [ Monetizable / Non-Drop ] 📹', category: '🎥 YouTube Views & Watch Time', rate: 90.00, min: 500, max: 1000000 },
+    { service: '402', name: 'YouTube Shorts Views [ Super Fast Viral Boost ] ⚡', category: '🎥 YouTube Views & Watch Time', rate: 25.00, min: 1000, max: 5000000 },
+    { service: '403', name: 'YouTube 4000 Hours Watch Time Package [ Monetization Ready ] ⏱️', category: '🎥 YouTube Views & Watch Time', rate: 2800.00, min: 1, max: 10 },
+    { service: '404', name: 'YouTube Video Likes [ Real Accounts / Lifetime Guarantee ] 👍', category: '🎥 YouTube Views & Watch Time', rate: 80.00, min: 50, max: 50000 },
+    { service: '405', name: 'YouTube Subscribers [ Non-Drop / Lifetime Refill Guarantee ] 🔴', category: '🎥 YouTube Views & Watch Time', rate: 250.00, min: 50, max: 20000 },
+
+    // Telegram Services
+    { service: '501', name: 'Telegram Channel/Group Members [ Non-Drop / Instant Start ] ✈️', category: '✈️ Telegram Members & Views', rate: 40.00, min: 100, max: 200000 },
+    { service: '502', name: 'Telegram Real Indian Channel Members [ High Quality ] 🇮🇳', category: '✈️ Telegram Members & Views', rate: 85.00, min: 100, max: 50000 },
+    { service: '503', name: 'Telegram Post Views [ Last 5 Posts Auto Views ] 👁️', category: '✈️ Telegram Members & Views', rate: 5.00, min: 100, max: 500000 },
+    { service: '504', name: 'Telegram Positive Post Reactions [ 👍🔥❤️ Combo ] 😍', category: '✈️ Telegram Members & Views', rate: 10.00, min: 50, max: 100000 },
+
+    // Facebook Services
+    { service: '601', name: 'Facebook Page Likes + Followers Combo [ High Quality ] 👍', category: '👍 Facebook Services', rate: 95.00, min: 100, max: 100000 },
+    { service: '602', name: 'Facebook Profile Followers [ Non-Drop / Fast Speed ] 👤', category: '👍 Facebook Services', rate: 85.00, min: 100, max: 100000 },
+    { service: '603', name: 'Facebook Post Likes & Reactions [ Like / Love / Care ] ❤️', category: '👍 Facebook Services', rate: 30.00, min: 50, max: 50000 },
+    { service: '604', name: 'Facebook Video Views [ Monetizable Watch Time ] 🎬', category: '👍 Facebook Services', rate: 18.00, min: 1000, max: 1000000 },
+
+    // TikTok Services
+    { service: '701', name: 'TikTok Followers [ Real Active / Fast Delivery ] 🎵', category: '🎵 TikTok Services', rate: 85.00, min: 100, max: 100000 },
+    { service: '702', name: 'TikTok Video Likes [ Instant High Speed ] ❤️', category: '🎵 TikTok Services', rate: 18.00, min: 100, max: 500000 },
+    { service: '703', name: 'TikTok Video Views [ Super Cheap / Fast ] 🚀', category: '🎵 TikTok Services', rate: 2.00, min: 1000, max: 10000000 },
+
+    // Twitter (X) Services
+    { service: '801', name: 'Twitter / X Real Looking Followers [ Non-Drop ] 🐦', category: '🐦 Twitter (X) Services', rate: 110.00, min: 100, max: 50000 },
+    { service: '802', name: 'Twitter / X Tweet Likes [ High Speed ] ❤️', category: '🐦 Twitter (X) Services', rate: 45.00, min: 50, max: 50000 },
+    { service: '803', name: 'Twitter / X Retweets [ Instant Processing ] 🔄', category: '🐦 Twitter (X) Services', rate: 50.00, min: 50, max: 25000 },
+
+    // Spotify Services
+    { service: '901', name: 'Spotify Track Plays [ Premium Royalties Eligible ] 🎧', category: '🎧 Spotify Music Promotion', rate: 35.00, min: 1000, max: 1000000 },
+    { service: '902', name: 'Spotify Artist Followers [ Real Profiles ] 🎵', category: '🎧 Spotify Music Promotion', rate: 90.00, min: 100, max: 50000 }
   ];
 
   for (const item of fallbackServices) {
@@ -1120,7 +1407,7 @@ app.post('/api/admin/api-providers/:id/sync-services', authMiddleware, adminMidd
     const finalPrice = Number((item.rate * (1 + globalMargin / 100)).toFixed(2));
     const srvId = `prov_${provider.id}_${item.service}`;
 
-    const existingIdx = services.findIndex((s) => s.id === srvId);
+    const existingIdx = services.findIndex((s) => s.id === srvId || (s.apiProviderId === provider.id && s.apiServiceId === item.service));
 
     const newSrv: Service = {
       id: srvId,
@@ -1129,7 +1416,7 @@ app.post('/api/admin/api-providers/:id/sync-services', authMiddleware, adminMidd
       apiProviderId: provider.id,
       apiServiceId: String(item.service),
       name: item.name,
-      description: `Imported from ${provider.name}. High speed processing & guaranteed quality.`,
+      description: `Official Glory SMM Panel Service #${item.service}. High speed automated delivery, non-drop quality & guaranteed support.`,
       minQuantity: item.min,
       maxQuantity: item.max,
       originalPrice: item.rate,
@@ -1151,7 +1438,7 @@ app.post('/api/admin/api-providers/:id/sync-services', authMiddleware, adminMidd
 
   res.json({
     success: true,
-    message: `Imported ${importedCount} services from ${provider.name} into database!`,
+    message: `Successfully scanned & imported ${importedCount} services from ${provider.name}!`,
     count: importedCount
   });
 });

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { UserPlus, Mail, Lock, User as UserIcon, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import { GoogleAccountModal } from '../../components/GoogleAccountModal';
+import { tryGoogleFirebasePopup } from '../../lib/firebaseAuth';
 
 interface RegisterPageProps {
   onNavigate: (page: string) => void;
@@ -17,6 +19,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,13 +51,25 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
     setErrorMsg('');
     setLoading(true);
     try {
-      await loginWithGoogle('googleuser@agtechsmm.com', 'Google User');
-      onNavigate('dashboard');
+      // 1. Try Firebase popup first
+      const popupResult = await tryGoogleFirebasePopup();
+      if (popupResult && popupResult.email) {
+        await loginWithGoogle(popupResult.email, popupResult.name);
+        onNavigate('dashboard');
+        return;
+      }
+      // 2. If popup blocked or closed, open Google Account modal
+      setShowGoogleModal(true);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Google sign-in failed');
+      setShowGoogleModal(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectGoogleAccount = async (googleEmail: string, googleName: string) => {
+    await loginWithGoogle(googleEmail, googleName);
+    onNavigate('dashboard');
   };
 
   return (
@@ -206,6 +221,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
         </div>
 
       </div>
+
+      <GoogleAccountModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSelectAccount={handleSelectGoogleAccount}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, ShoppingBag, Wallet, CheckCircle2, Clock, AlertCircle, TrendingUp, DollarSign } from 'lucide-react';
+import { Users, ShoppingBag, Wallet, CheckCircle2, Clock, AlertCircle, TrendingUp, DollarSign, Mail, Send, Check } from 'lucide-react';
 import { FundRequest, Order } from '../../types';
 
 interface AdminDashboardProps {
@@ -11,6 +11,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateTab })
   const [pendingRequests, setPendingRequests] = useState<FundRequest[]>([]);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [testEmail, setTestEmail] = useState<string>('tiwarigautam819@gmail.com');
+  const [testType, setTestType] = useState<'order' | 'ticket'>('order');
+  const [sendingTest, setSendingTest] = useState<boolean>(false);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
+
+  const handleSendTestEmail = async () => {
+    setSendingTest(true);
+    setTestFeedback(null);
+    try {
+      const res = await fetch('/api/admin/notifications/test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('ag_auth_token')}`
+        },
+        body: JSON.stringify({
+          recipientEmail: testEmail,
+          type: testType,
+          testMessage: 'Your refill request has been processed successfully by AG Tech Admin.'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestFeedback(`✅ ${data.message}`);
+      } else {
+        setTestFeedback(`❌ Failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      setTestFeedback(`❌ Error: ${err.message}`);
+    } finally {
+      setSendingTest(false);
+    }
+  };
 
   const fetchAdminData = async () => {
     try {
@@ -240,6 +273,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateTab })
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Firebase Email Notifications Tester Panel */}
+      <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl p-6 shadow-xl border border-indigo-900 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center font-bold">
+              <Mail className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black tracking-tight flex items-center space-x-2">
+                <span>Firebase Email Notification Trigger</span>
+                <span className="px-2 py-0.5 text-[10px] font-black uppercase bg-orange-500 text-white rounded-full">
+                  Active
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Trigger email notifications for order status changes or support ticket replies automatically
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+              Recipient Email
+            </label>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 text-white text-sm font-medium rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-indigo-500"
+              placeholder="user@example.com"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+              Trigger Notification Event
+            </label>
+            <select
+              value={testType}
+              onChange={(e: any) => setTestType(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 text-white text-sm font-bold rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="order">Order Status Changed (Order #1024 -&gt; Completed)</option>
+              <option value="ticket">Support Ticket Replied (Admin Reply to Ticket)</option>
+            </select>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              onClick={handleSendTestEmail}
+              disabled={sendingTest || !testEmail}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm py-2.5 rounded-xl shadow-lg flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <Send className="w-4 h-4" />
+              <span>{sendingTest ? 'Dispatching Email...' : 'Test Trigger Email'}</span>
+            </button>
+          </div>
+        </div>
+
+        {testFeedback && (
+          <div className="p-3 bg-slate-800/80 border border-slate-700 rounded-xl text-xs font-mono text-indigo-200">
+            {testFeedback}
+          </div>
+        )}
       </div>
 
     </div>

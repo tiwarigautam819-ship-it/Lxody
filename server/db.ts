@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 export interface User {
   id: string;
@@ -148,6 +150,29 @@ export interface Announcement {
   createdAt: string;
 }
 
+export interface AppNotification {
+  id: string;
+  userId: string;
+  userEmail: string;
+  type: 'order_status_change' | 'ticket_reply' | 'system';
+  title: string;
+  message: string;
+  link?: string;
+  emailSent?: boolean;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface TutorialVideo {
+  id: string;
+  title: string;
+  description?: string;
+  videoUrl: string;
+  category?: string;
+  active: boolean;
+  createdAt: string;
+}
+
 interface DBData {
   users: User[];
   categories: ServiceCategory[];
@@ -157,6 +182,8 @@ interface DBData {
   fundRequests: FundRequest[];
   transactions: Transaction[];
   tickets: SupportTicket[];
+  notifications: AppNotification[];
+  tutorialVideos: TutorialVideo[];
   websiteSettings: WebsiteSettings;
   paymentSettings: PaymentSettings;
   socialLinks: SocialLink[];
@@ -164,6 +191,21 @@ interface DBData {
 }
 
 const DB_FILE = path.join(process.cwd(), 'data_db.json');
+
+// Initialize Firestore DB connection if firebase-applet-config exists
+let firestoreDb: ReturnType<typeof getFirestore> | null = null;
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const app = getApps().length > 0 ? getApp() : initializeApp(config);
+    const dbId = config.firestoreDatabaseId || '(default)';
+    firestoreDb = getFirestore(app, dbId);
+    console.log(`[Firestore] Initialized Firestore successfully (${dbId})`);
+  }
+} catch (err) {
+  console.error('[Firestore] Initialization error:', err);
+}
 
 const defaultData: DBData = {
   users: [
@@ -181,7 +223,7 @@ const defaultData: DBData = {
     {
       id: 'admin_1',
       email: 'admin@agtechsmm.com',
-      passwordHash: 'admin123', // Demo plaintext for ease, checked via simple comparison
+      passwordHash: 'admin123',
       name: 'AG Tech Admin',
       role: 'admin',
       walletBalance: 10000,
@@ -361,6 +403,27 @@ const defaultData: DBData = {
       active: true,
       createdAt: new Date().toISOString()
     }
+  ],
+  notifications: [],
+  tutorialVideos: [
+    {
+      id: 'VID_1',
+      title: 'How to Place a New Order on AG TECH SMM Panel',
+      description: 'Watch step-by-step how to select service, paste your target link, enter quantity, and place instant orders.',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      category: 'New Order Guide',
+      active: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'VID_2',
+      title: 'How to Add Funds using PhonePe / Paytm / UPI QR Code',
+      description: 'Step by step guide to scan UPI QR code, pay funds, copy 12-digit UTR and add instant balance.',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      category: 'Add Funds Guide',
+      active: true,
+      createdAt: new Date().toISOString()
+    }
   ]
 };
 
@@ -368,10 +431,11 @@ export class Database {
   private data: DBData;
 
   constructor() {
-    this.data = this.load();
+    this.data = this.loadLocal();
+    this.syncWithFirestore();
   }
 
-  private load(): DBData {
+  private loadLocal(): DBData {
     let result = defaultData;
     try {
       if (fs.existsSync(DB_FILE)) {
@@ -382,8 +446,13 @@ export class Database {
     } catch (err) {
       console.error('Error reading DB_FILE, fallback to default:', err);
     }
+    return this.ensureDefaults(result);
+  }
 
-    // Ensure tiwarigautam819@gmail.com is present as admin
+  private ensureDefaults(result: DBData): DBData {
+    if (!result.notifications) result.notifications = [];
+    if (!result.tutorialVideos) result.tutorialVideos = defaultData.tutorialVideos;
+
     const tiwariEmail = 'tiwarigautam819@gmail.com';
     let tiwariUser = result.users.find(u => u.email.toLowerCase() === tiwariEmail.toLowerCase());
     if (!tiwariUser) {
@@ -402,7 +471,6 @@ export class Database {
       tiwariUser.role = 'admin';
     }
 
-    // Ensure Glory SMM provider is present
     const gloryUrl = 'https://glorysmmpanel.com/api/v2';
     const gloryProvider = result.apiProviders.find(p => p.url === gloryUrl);
     if (!gloryProvider) {
@@ -416,19 +484,237 @@ export class Database {
       });
     }
 
-    this.save(result);
+    // Sanitize websiteSettings to avoid document size bloat
+    const ws = result.websiteSettings || defaultData.websiteSettings;
+    result.websiteSettings = {
+      name: ws.name || defaultData.websiteSettings.name,
+      logoUrl: ws.logoUrl || defaultData.websiteSettings.logoUrl,
+      faviconUrl: ws.faviconUrl || defaultData.websiteSettings.faviconUrl,
+      description: ws.description || defaultData.websiteSettings.description,
+      aboutUs: ws.aboutUs || defaultData.websiteSettings.aboutUs,
+      contactEmail: ws.contactEmail || defaultData.websiteSettings.contactEmail,
+      contactPhone: ws.contactPhone || defaultData.websiteSettings.contactPhone,
+      noticeText: ws.noticeText || defaultData.websiteSettings.noticeText,
+      footerText: ws.footerText || defaultData.websiteSettings.footerText,
+      globalMarginPercent: ws.globalMarginPercent !== undefined ? ws.globalMarginPercent : defaultData.websiteSettings.globalMarginPercent,
+    };
+
+    // Sanitize paymentSettings
+    const ps = result.paymentSettings || defaultData.paymentSettings;
+    result.paymentSettings = {
+      upiId: ps.upiId || defaultData.paymentSettings.upiId,
+      qrCodeUrl: ps.qrCodeUrl || defaultData.paymentSettings.qrCodeUrl,
+      instructions: ps.instructions || defaultData.paymentSettings.instructions,
+      minDeposit: ps.minDeposit !== undefined ? ps.minDeposit : defaultData.paymentSettings.minDeposit,
+      maxDeposit: ps.maxDeposit !== undefined ? ps.maxDeposit : defaultData.paymentSettings.maxDeposit,
+      isEnabled: ps.isEnabled !== undefined ? ps.isEnabled : defaultData.paymentSettings.isEnabled,
+    };
+
     return result;
+  }
+
+  private async syncWithFirestore() {
+    if (!firestoreDb) return;
+    try {
+      console.log('[Firestore] Checking remote data sync...');
+      const collections = [
+        'users', 'categories', 'apiProviders', 'orders',
+        'fundRequests', 'transactions', 'tickets', 'notifications', 'tutorialVideos',
+        'websiteSettings', 'paymentSettings', 'socialLinks', 'announcements'
+      ];
+
+      let hasRemoteData = false;
+      const fetchedData: Partial<DBData> = {};
+
+      for (const key of collections) {
+        try {
+          const docRef = doc(firestoreDb, 'smm_panel', key);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            hasRemoteData = true;
+            const data = snap.data();
+            if (key === 'websiteSettings') {
+              fetchedData.websiteSettings = {
+                name: data.name || defaultData.websiteSettings.name,
+                logoUrl: data.logoUrl || defaultData.websiteSettings.logoUrl,
+                faviconUrl: data.faviconUrl || defaultData.websiteSettings.faviconUrl,
+                description: data.description || defaultData.websiteSettings.description,
+                aboutUs: data.aboutUs || defaultData.websiteSettings.aboutUs,
+                contactEmail: data.contactEmail || defaultData.websiteSettings.contactEmail,
+                contactPhone: data.contactPhone || defaultData.websiteSettings.contactPhone,
+                noticeText: data.noticeText || defaultData.websiteSettings.noticeText,
+                footerText: data.footerText || defaultData.websiteSettings.footerText,
+                globalMarginPercent: data.globalMarginPercent !== undefined ? data.globalMarginPercent : defaultData.websiteSettings.globalMarginPercent,
+              };
+            } else if (key === 'paymentSettings') {
+              fetchedData.paymentSettings = {
+                upiId: data.upiId || defaultData.paymentSettings.upiId,
+                qrCodeUrl: data.qrCodeUrl || defaultData.paymentSettings.qrCodeUrl,
+                instructions: data.instructions || defaultData.paymentSettings.instructions,
+                minDeposit: data.minDeposit !== undefined ? data.minDeposit : defaultData.paymentSettings.minDeposit,
+                maxDeposit: data.maxDeposit !== undefined ? data.maxDeposit : defaultData.paymentSettings.maxDeposit,
+                isEnabled: data.isEnabled !== undefined ? data.isEnabled : defaultData.paymentSettings.isEnabled,
+              };
+            } else if (data && data[key]) {
+              (fetchedData as any)[key] = data[key];
+            }
+          }
+        } catch (e) {
+          console.error(`[Firestore] Error fetching key ${key}:`, e);
+        }
+      }
+
+      // Fetch services chunks
+      const fetchedServices: Service[] = [];
+      let chunkIdx = 0;
+      while (chunkIdx < 30) { // Max 30 chunks = 7,500 services
+        try {
+          const docRef = doc(firestoreDb, 'smm_panel', `services_chunk_${chunkIdx}`);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            hasRemoteData = true;
+            const data = snap.data();
+            if (data && Array.isArray(data.services)) {
+              fetchedServices.push(...data.services);
+            }
+          } else {
+            break;
+          }
+        } catch (e) {
+          break;
+        }
+        chunkIdx++;
+      }
+
+      if (fetchedServices.length > 0) {
+        fetchedData.services = fetchedServices;
+      }
+
+      if (hasRemoteData) {
+        const mergedUsers = (fetchedData.users && fetchedData.users.length > 0) ? fetchedData.users : this.data.users;
+        const mergedCategories = (fetchedData.categories && fetchedData.categories.length > 0) ? fetchedData.categories : this.data.categories;
+        const mergedServices = (fetchedData.services && fetchedData.services.length >= this.data.services.length) ? fetchedData.services : this.data.services;
+        const mergedApiProviders = (fetchedData.apiProviders && fetchedData.apiProviders.length > 0) ? fetchedData.apiProviders : this.data.apiProviders;
+        const mergedOrders = (fetchedData.orders && fetchedData.orders.length > 0) ? fetchedData.orders : this.data.orders;
+        const mergedFundRequests = (fetchedData.fundRequests && fetchedData.fundRequests.length > 0) ? fetchedData.fundRequests : this.data.fundRequests;
+        const mergedTransactions = (fetchedData.transactions && fetchedData.transactions.length > 0) ? fetchedData.transactions : this.data.transactions;
+        const mergedTickets = (fetchedData.tickets && fetchedData.tickets.length > 0) ? fetchedData.tickets : this.data.tickets;
+        const mergedNotifications = (fetchedData.notifications && fetchedData.notifications.length > 0) ? fetchedData.notifications : this.data.notifications;
+        const mergedVideos = (fetchedData.tutorialVideos && fetchedData.tutorialVideos.length > 0) ? fetchedData.tutorialVideos : this.data.tutorialVideos;
+        const mergedWebsite = fetchedData.websiteSettings || this.data.websiteSettings;
+        const mergedPayment = fetchedData.paymentSettings || this.data.paymentSettings;
+        const mergedSocial = fetchedData.socialLinks || this.data.socialLinks;
+        const mergedAnnounce = fetchedData.announcements || this.data.announcements;
+
+        this.data = this.ensureDefaults({
+          users: mergedUsers,
+          categories: mergedCategories,
+          services: mergedServices,
+          apiProviders: mergedApiProviders,
+          orders: mergedOrders,
+          fundRequests: mergedFundRequests,
+          transactions: mergedTransactions,
+          tickets: mergedTickets,
+          notifications: mergedNotifications,
+          tutorialVideos: mergedVideos,
+          websiteSettings: mergedWebsite,
+          paymentSettings: mergedPayment,
+          socialLinks: mergedSocial,
+          announcements: mergedAnnounce
+        });
+        this.saveLocal();
+        console.log(`[Firestore] Synced with Firestore! Loaded ${this.data.services.length} services, ${this.data.users.length} users.`);
+      }
+
+      // Sync back to Firestore in chunked mode
+      this.saveToFirestore();
+    } catch (err) {
+      console.error('[Firestore] Sync error:', err);
+    }
+  }
+
+  private async saveToFirestore() {
+    if (!firestoreDb) return;
+    try {
+      const dbObj = JSON.parse(JSON.stringify(this.data));
+
+      const keys = [
+        'users', 'categories', 'apiProviders', 'orders',
+        'fundRequests', 'transactions', 'tickets', 'notifications', 'tutorialVideos',
+        'websiteSettings', 'paymentSettings', 'socialLinks', 'announcements'
+      ];
+
+      for (const key of keys) {
+        const docRef = doc(firestoreDb, 'smm_panel', key);
+        if (key === 'websiteSettings') {
+          const ws = dbObj.websiteSettings || {};
+          let safeLogo = ws.logoUrl || '';
+          if (safeLogo.length > 200000) safeLogo = '';
+          let safeFav = ws.faviconUrl || '';
+          if (safeFav.length > 200000) safeFav = '';
+
+          const cleanWS = {
+            name: ws.name || '',
+            logoUrl: safeLogo,
+            faviconUrl: safeFav,
+            description: ws.description || '',
+            aboutUs: ws.aboutUs || '',
+            contactEmail: ws.contactEmail || '',
+            contactPhone: ws.contactPhone || '',
+            noticeText: ws.noticeText || '',
+            footerText: ws.footerText || '',
+            globalMarginPercent: ws.globalMarginPercent !== undefined ? ws.globalMarginPercent : 20,
+          };
+          await setDoc(docRef, cleanWS);
+        } else if (key === 'paymentSettings') {
+          const ps = dbObj.paymentSettings || {};
+          let safeQr = ps.qrCodeUrl || '';
+          if (safeQr.length > 200000) safeQr = '';
+
+          const cleanPS = {
+            upiId: ps.upiId || '',
+            qrCodeUrl: safeQr,
+            instructions: ps.instructions || '',
+            minDeposit: ps.minDeposit || 10,
+            maxDeposit: ps.maxDeposit || 100000,
+            isEnabled: ps.isEnabled !== undefined ? ps.isEnabled : true,
+          };
+          await setDoc(docRef, cleanPS);
+        } else {
+          await setDoc(docRef, { [key]: dbObj[key] || [] });
+        }
+      }
+
+      // Save services in chunks of 250
+      const services = dbObj.services || [];
+      const CHUNK_SIZE = 250;
+      let chunkIdx = 0;
+      for (let i = 0; i < services.length; i += CHUNK_SIZE) {
+        const chunk = services.slice(i, i + CHUNK_SIZE);
+        const docRef = doc(firestoreDb, 'smm_panel', `services_chunk_${chunkIdx}`);
+        await setDoc(docRef, { services: chunk });
+        chunkIdx++;
+      }
+      console.log(`[Firestore] Saved data to Firestore successfully (${chunkIdx} service chunks)`);
+    } catch (err) {
+      console.error('[Firestore] Save error:', err);
+    }
+  }
+
+  private saveLocal() {
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Error saving DB_FILE:', err);
+    }
   }
 
   public save(newData?: DBData) {
     if (newData) {
       this.data = newData;
     }
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Error saving DB_FILE:', err);
-    }
+    this.saveLocal();
+    this.saveToFirestore();
   }
 
   // Helper getters and mutators
@@ -599,6 +885,64 @@ export class Database {
 
   public setAnnouncements(announcements: Announcement[]) {
     this.data.announcements = announcements;
+    this.save();
+  }
+
+  public getNotifications(userId?: string): AppNotification[] {
+    const list = this.data.notifications || [];
+    if (!userId) return list;
+    return list.filter((n) => n.userId === userId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public addNotification(notification: AppNotification) {
+    if (!this.data.notifications) this.data.notifications = [];
+    this.data.notifications.unshift(notification);
+    this.save();
+  }
+
+  public markNotificationRead(id: string, userId: string) {
+    if (!this.data.notifications) return;
+    const notif = this.data.notifications.find((n) => n.id === id && n.userId === userId);
+    if (notif) {
+      notif.read = true;
+      this.save();
+    }
+  }
+
+  public markAllNotificationsRead(userId: string) {
+    if (!this.data.notifications) return;
+    this.data.notifications.forEach((n) => {
+      if (n.userId === userId) n.read = true;
+    });
+    this.save();
+  }
+
+  public getTutorialVideos(activeOnly = false): TutorialVideo[] {
+    const list = this.data.tutorialVideos || [];
+    if (activeOnly) {
+      return list.filter((v) => v.active);
+    }
+    return list;
+  }
+
+  public addTutorialVideo(video: TutorialVideo) {
+    if (!this.data.tutorialVideos) this.data.tutorialVideos = [];
+    this.data.tutorialVideos.unshift(video);
+    this.save();
+  }
+
+  public updateTutorialVideo(id: string, updates: Partial<TutorialVideo>) {
+    if (!this.data.tutorialVideos) return;
+    const index = this.data.tutorialVideos.findIndex((v) => v.id === id);
+    if (index !== -1) {
+      this.data.tutorialVideos[index] = { ...this.data.tutorialVideos[index], ...updates };
+      this.save();
+    }
+  }
+
+  public deleteTutorialVideo(id: string) {
+    if (!this.data.tutorialVideos) return;
+    this.data.tutorialVideos = this.data.tutorialVideos.filter((v) => v.id !== id);
     this.save();
   }
 }

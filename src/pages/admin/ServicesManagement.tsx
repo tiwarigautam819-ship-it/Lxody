@@ -328,6 +328,19 @@ export const ServicesManagement: React.FC = () => {
                 </div>
               </div>
 
+              {/* Real-time calculated price preview */}
+              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between text-xs font-bold text-emerald-900">
+                <div>
+                  <span className="text-emerald-700">Calculated Final Price / 1k:</span>
+                  <p className="text-[10px] text-emerald-600 font-normal">
+                    ₹{Number(originalPrice) || 0} + {Number(marginPercent) || 0}% margin
+                  </p>
+                </div>
+                <span className="text-lg font-black text-emerald-700">
+                  ₹{((Number(originalPrice) || 0) * (1 + (Number(marginPercent) || 0) / 100)).toFixed(2)}
+                </span>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">

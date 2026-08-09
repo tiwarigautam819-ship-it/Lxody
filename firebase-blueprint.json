@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "users/{userId}": {
+      "title": "User",
+      "description": "SMM Panel Users and Admins",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "walletBalance": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "passwordHash", "name", "role"]
+    },
+    "categories/{categoryId}": {
+      "title": "ServiceCategory",
+      "description": "SMM Service Categories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "icon": { "type": "string" },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "services/{serviceId}": {
+      "title": "Service",
+      "description": "SMM Services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "minQuantity": { "type": "number" },
+        "maxQuantity": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "finalPrice": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "categoryId", "name"]
+    },
+    "apiProviders/{providerId}": {
+      "title": "ApiProvider",
+      "description": "External SMM API Providers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "apiKey": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "url", "apiKey"]
+    },
+    "orders/{orderId}": {
+      "title": "Order",
+      "description": "SMM Customer Orders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "quantity": { "type": "number" },
+        "charge": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "serviceId"]
+    },
+    "fundRequests/{requestId}": {
+      "title": "FundRequest",
+      "description": "Deposit & Add Fund Requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "utrNumber": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount", "utrNumber"]
+    },
+    "transactions/{txId}": {
+      "title": "Transaction",
+      "description": "Wallet Balance Transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount", "type"]
+    },
+    "tickets/{ticketId}": {
+      "title": "SupportTicket",
+      "description": "Support Tickets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "subject": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "userId", "subject"]
+    },
+    "settings/{docId}": {
+      "title": "Settings",
+      "description": "Panel website and payment settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" }
+      }
+    }
+  }
+}

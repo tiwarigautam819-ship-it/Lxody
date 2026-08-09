@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { SidebarDrawer } from './components/SidebarDrawer';
 import { NoticeBanner } from './components/NoticeBanner';
 import { WhatsAppButton } from './components/WhatsAppButton';
+import { BackgroundEffects } from './components/BackgroundEffects';
 
 // User & Public Pages
 import { LandingPage } from './pages/public/LandingPage';
@@ -35,6 +36,7 @@ import { PaymentSettingsPage } from './pages/admin/PaymentSettingsPage';
 import { WebsiteSettingsPage } from './pages/admin/WebsiteSettingsPage';
 import { SocialLinksPage } from './pages/admin/SocialLinksPage';
 import { AdminTicketsPage } from './pages/admin/AdminTicketsPage';
+import { VideosManagement } from './pages/admin/VideosManagement';
 
 export function App() {
   const { user } = useAuth();
@@ -50,28 +52,34 @@ export function App() {
   // Render Admin Panel if on 'admin' page and user is admin
   if (currentPage === 'admin' && user?.role === 'admin') {
     return (
-      <AdminLayout
-        currentTab={adminTab}
-        onSelectTab={(tab) => setAdminTab(tab)}
-        onNavigateUserDashboard={() => handleNavigate('dashboard')}
-      >
-        {adminTab === 'dashboard' && <AdminDashboard onNavigateTab={(tab) => setAdminTab(tab)} />}
-        {adminTab === 'users' && <UserManagement />}
-        {adminTab === 'fund-requests' && <FundRequestsManagement />}
-        {adminTab === 'orders' && <OrdersManagement />}
-        {adminTab === 'services' && <ServicesManagement />}
-        {adminTab === 'api-providers' && <ApiProvidersPage />}
-        {adminTab === 'pricing' && <PricingSettings />}
-        {adminTab === 'payment-settings' && <PaymentSettingsPage />}
-        {adminTab === 'website-settings' && <WebsiteSettingsPage />}
-        {adminTab === 'social-links' && <SocialLinksPage />}
-        {adminTab === 'tickets' && <AdminTicketsPage />}
-      </AdminLayout>
+      <>
+        <BackgroundEffects />
+        <AdminLayout
+          currentTab={adminTab}
+          onSelectTab={(tab) => setAdminTab(tab)}
+          onNavigateUserDashboard={() => handleNavigate('dashboard')}
+        >
+          {adminTab === 'dashboard' && <AdminDashboard onNavigateTab={(tab) => setAdminTab(tab)} />}
+          {adminTab === 'users' && <UserManagement />}
+          {adminTab === 'fund-requests' && <FundRequestsManagement />}
+          {adminTab === 'orders' && <OrdersManagement />}
+          {adminTab === 'services' && <ServicesManagement />}
+          {adminTab === 'api-providers' && <ApiProvidersPage />}
+          {adminTab === 'pricing' && <PricingSettings />}
+          {adminTab === 'payment-settings' && <PaymentSettingsPage />}
+          {adminTab === 'website-settings' && <WebsiteSettingsPage />}
+          {adminTab === 'videos' && <VideosManagement />}
+          {adminTab === 'social-links' && <SocialLinksPage />}
+          {adminTab === 'tickets' && <AdminTicketsPage />}
+        </AdminLayout>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F9] font-sans antialiased text-gray-900 flex flex-col selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen bg-[#F4F6F9] font-sans antialiased text-gray-900 flex flex-col selection:bg-blue-600 selection:text-white w-full max-w-full overflow-x-hidden">
+      {/* Background Falling Animation Effects */}
+      <BackgroundEffects />
       
       {/* Announcement Banner */}
       <NoticeBanner />
@@ -79,7 +87,6 @@ export function App() {
       {/* Primary Header */}
       <Header
         activePage={currentPage}
-        currentPage={currentPage}
         onNavigate={handleNavigate}
         onToggleSidebar={() => setSidebarOpen(true)}
       />
@@ -93,7 +100,7 @@ export function App() {
       />
 
       {/* Main Page Content */}
-      <main className="flex-1">
+      <main className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden">
         {currentPage === 'landing' && <LandingPage onNavigate={handleNavigate} />}
         {currentPage === 'login' && <LoginPage onNavigate={handleNavigate} />}
         {currentPage === 'register' && <RegisterPage onNavigate={handleNavigate} />}

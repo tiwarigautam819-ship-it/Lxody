@@ -12,7 +12,8 @@ import {
   Share2,
   LifeBuoy,
   ArrowLeft,
-  Shield
+  Shield,
+  Video
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -38,12 +39,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'pricing', label: 'Pricing & Margins', icon: Percent },
     { id: 'payment-settings', label: 'QR Code & Payment', icon: QrCode },
     { id: 'website-settings', label: 'Website Settings', icon: Globe },
+    { id: 'videos', label: 'Tutorial Videos', icon: Video },
     { id: 'social-links', label: 'Social & Contact Links', icon: Share2 },
     { id: 'tickets', label: 'Support Tickets', icon: LifeBuoy }
   ];
 
   return (
-    <div className="min-h-screen bg-[#F4F6F9] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#F4F6F9] flex flex-col md:flex-row w-full max-w-full overflow-x-hidden">
 
       {/* Admin Sidebar */}
       <aside className="w-full md:w-64 bg-slate-900 text-slate-200 shrink-0 border-r border-slate-800">
@@ -67,7 +69,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           </button>
         </div>
 
-        <nav className="p-2 space-y-1">
+        <nav className="p-2 flex md:flex-col overflow-x-auto md:overflow-x-visible space-x-1.5 md:space-x-0 md:space-y-1 no-scrollbar shrink-0">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -75,14 +77,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center space-x-3 transition-colors ${
+                className={`text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center space-x-2.5 transition-colors shrink-0 ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-md font-bold'
                     : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                <span>{item.label}</span>
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <span className="whitespace-nowrap">{item.label}</span>
               </button>
             );
           })}
@@ -100,7 +102,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       </aside>
 
       {/* Admin Content Area */}
-      <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl">
+      <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full max-w-full min-w-0 overflow-x-hidden">
         {children}
       </main>
 
