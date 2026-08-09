@@ -1627,6 +1627,20 @@ app.get('/api/admin/tickets', authMiddleware, adminMiddleware, (req: Authenticat
   res.json({ success: true, tickets: db.getTickets() });
 });
 
+// Service Worker verification route for Ads (Monetag/PropellerAds)
+const swContent = `self.options = {
+    "domain": "3nbf4.com",
+    "zoneId": 11540397
+}
+self.lary = ""
+importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')`;
+
+app.get(['/sw.js', '/service-worker.js'], (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.send(swContent);
+});
+
 // Vite Middleware setup for dev server / static serving in production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
