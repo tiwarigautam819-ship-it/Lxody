@@ -375,7 +375,7 @@ const defaultData: DBData = {
     description: 'Best & Cheapest Social Media Marketing Panel for Instagram, YouTube, Telegram, Facebook and TikTok. Fast automated order processing with 24/7 support.',
     aboutUs: 'AG Tech SMM is the leading Social Media Services Provider offering high speed, non-drop engagement solutions for influencers, content creators, digital agencies, and resellers worldwide.',
     contactEmail: 'support@agtechsmm.com',
-    contactPhone: '+91 98765 43210',
+    contactPhone: '+91 89559 32061',
     noticeText: '⚡ Fast Processing Enabled! All Instagram Likes & Followers working smooth.',
     footerText: '© 2026 AG Tech SMM. All Rights Reserved. Premier SMM Panel Services.',
     globalMarginPercent: 20
@@ -390,7 +390,7 @@ const defaultData: DBData = {
   },
   socialLinks: [
     { id: 'soc_1', platform: 'Telegram', url: 'https://t.me/agtechsmm', icon: 'send', enabled: true },
-    { id: 'soc_2', platform: 'WhatsApp', url: 'https://wa.me/919876543210?text=Hello%20AG%20Tech%20SMM%20Support', icon: 'message-circle', enabled: true },
+    { id: 'soc_2', platform: 'WhatsApp', url: 'https://wa.me/918955932061?text=Hello%20AG%20Tech%20SMM%20Support', icon: 'message-circle', enabled: true },
     { id: 'soc_3', platform: 'Instagram', url: 'https://instagram.com/agtechsmm', icon: 'instagram', enabled: true },
     { id: 'soc_4', platform: 'YouTube', url: 'https://youtube.com/@agtechsmm', icon: 'youtube', enabled: true }
   ],
@@ -486,6 +486,7 @@ export class Database {
 
     // Sanitize websiteSettings to avoid document size bloat
     const ws = result.websiteSettings || defaultData.websiteSettings;
+    const rawPhone = ws.contactPhone || defaultData.websiteSettings.contactPhone;
     result.websiteSettings = {
       name: ws.name || defaultData.websiteSettings.name,
       logoUrl: ws.logoUrl || defaultData.websiteSettings.logoUrl,
@@ -493,11 +494,22 @@ export class Database {
       description: ws.description || defaultData.websiteSettings.description,
       aboutUs: ws.aboutUs || defaultData.websiteSettings.aboutUs,
       contactEmail: ws.contactEmail || defaultData.websiteSettings.contactEmail,
-      contactPhone: ws.contactPhone || defaultData.websiteSettings.contactPhone,
+      contactPhone: rawPhone.includes('9876543210') ? '+91 89559 32061' : rawPhone,
       noticeText: ws.noticeText || defaultData.websiteSettings.noticeText,
       footerText: ws.footerText || defaultData.websiteSettings.footerText,
       globalMarginPercent: ws.globalMarginPercent !== undefined ? ws.globalMarginPercent : defaultData.websiteSettings.globalMarginPercent,
     };
+
+    if (!result.socialLinks || result.socialLinks.length === 0) {
+      result.socialLinks = defaultData.socialLinks;
+    } else {
+      result.socialLinks = result.socialLinks.map((s) => {
+        if (s.platform === 'WhatsApp' && s.url.includes('9876543210')) {
+          return { ...s, url: s.url.replace('9876543210', '8955932061') };
+        }
+        return s;
+      });
+    }
 
     // Sanitize paymentSettings
     const ps = result.paymentSettings || defaultData.paymentSettings;

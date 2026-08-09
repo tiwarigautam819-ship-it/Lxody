@@ -47,7 +47,7 @@ export const ContactPage: React.FC<ContactPageProps> = () => {
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 font-bold uppercase">Phone / WhatsApp</p>
-                  <p className="font-extrabold text-gray-800">{website?.contactPhone || '+91 98765 43210'}</p>
+                  <p className="font-extrabold text-gray-800">{website?.contactPhone || '+91 89559 32061'}</p>
                 </div>
               </div>
             </div>
