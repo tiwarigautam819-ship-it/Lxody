@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Mail, ShieldCheck, ArrowRight, Sparkles } from 'lucide-react';
+import { X, User, Mail, ShieldCheck, Sparkles } from 'lucide-react';
 
 interface GoogleAccountModalProps {
   isOpen: boolean;
@@ -98,46 +98,11 @@ export const GoogleAccountModal: React.FC<GoogleAccountModalProps> = ({
             </div>
           )}
 
-          {/* Quick Account Suggestions */}
-          <div className="space-y-2">
-            <label className="block text-[11px] font-black uppercase text-gray-400 tracking-wider">
-              Select an account
-            </label>
-
-            {/* Quick Admin Choice */}
-            <button
-              type="button"
-              onClick={() => handleQuickSelect('tiwarigautam819@gmail.com', 'Gautam Tiwari (Admin)')}
-              disabled={loading}
-              className="w-full text-left p-3.5 bg-indigo-50/60 hover:bg-indigo-100/80 border border-indigo-200/80 rounded-2xl flex items-center justify-between transition-all group cursor-pointer"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-xs">
-                  G
-                </div>
-                <div>
-                  <div className="flex items-center space-x-1.5">
-                    <p className="text-xs font-black text-gray-900">Gautam Tiwari</p>
-                    <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-1.5 py-0.2 rounded-full">Admin</span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 font-medium">tiwarigautam819@gmail.com</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-indigo-600 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="relative flex items-center justify-center py-1">
-            <div className="border-t border-gray-200 w-full" />
-            <span className="bg-white px-3 text-[10px] font-black text-gray-400 uppercase absolute">Or enter another account</span>
-          </div>
-
           {/* Manual Google Account Form */}
-          <form onSubmit={handleSubmit} className="space-y-3.5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
-                Google Email Address
+                Your Google Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3.5 top-3 text-gray-400" />
@@ -154,13 +119,13 @@ export const GoogleAccountModal: React.FC<GoogleAccountModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
-                Your Name (Optional)
+                Your Name
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3.5 top-3 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="John Doe"
+                  placeholder="Your Full Name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
