@@ -6,7 +6,7 @@ export const WhatsAppButton: React.FC = () => {
   const { socialLinks, website } = useSettings();
 
   const waLink = socialLinks.find((s) => s.platform === 'WhatsApp' && s.enabled);
-  const targetUrl = waLink?.url || `https://wa.me/919876543210?text=Hello%20${encodeURIComponent(website?.name || 'AG Tech SMM')}%20Support`;
+  const targetUrl = waLink?.url || `https://wa.me/918955932061?text=Hello%20${encodeURIComponent(website?.name || 'AG Tech SMM')}%20Support`;
 
   return (
     <a
